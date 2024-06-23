@@ -14,6 +14,11 @@ public:
 	/// probabilistically to model the albedo.
 	/// </summary>
 	virtual bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation, Ray& rayOut) = 0;
+
+	virtual Color emitted(const Ray& rayIn, const Hit& hit, Random& rand)
+	{
+		return Color(0, 0, 0);
+	}
 };
 
 class Lambertian : public Material
@@ -139,5 +144,24 @@ private:
 		auto r0 = (1 - refraction_index) / (1 + refraction_index);
 		r0 = r0 * r0;
 		return r0 + (1 - r0) * pow((1 - cosine), 5);
+	}
+};
+
+class Emissive : public Material
+{
+private:
+	Color color;
+public:
+	Emissive(const Color& color) : color(color)
+	{
+
+	}
+	bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation, Ray& rayOut) override
+	{
+		return false;
+	}
+	Color emitted(const Ray& rayIn, const Hit& hit, Random& rand) override
+	{
+		return color;
 	}
 };

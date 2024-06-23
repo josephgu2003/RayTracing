@@ -20,6 +20,7 @@ public:
 	Point pos = Point(0.0, 0.0, 0.0);
 	Point lookAt = Point(0.0, 0.0, -1.0);
 	Vec upDir = Vec(0.0, 1.0, 0.0);
+	Color background = Color(0, 0, 0);
 };
 
 class Camera
@@ -32,6 +33,7 @@ public:
 		this->rand = random;
 		this->focusDist = params.focalDist;
 		this->defocusAngle = params.defocusAngle;
+		this->background = params.background;
 
 		// IMG PARAMS
 		// set up image pixel dims based on aspect ratio
@@ -92,16 +94,19 @@ public:
 		Hit hit;
 		if (hittables.hit(ray, interval, hit))
 		{
+			Color emitted = hit.mat->emitted(ray, hit, rand);
+
 			Color att;
 			Ray out;
-			hit.mat->scatter(ray, hit, rand, att, out);
-			return (rayColor(out, hittables, depth - 1)) * att;
-			//return glm::clamp(hit.normal, 0.0, 1.0);
-		}
 
-		auto unit_direction = ray.dir();
-		auto a = 0.5 * (unit_direction.y + 1.0);
-		return (1.0 - a) * Color(1.0, 1.0, 1.0) + a * Color(0.5, 0.7, 1.0);
+			if (!hit.mat->scatter(ray, hit, rand, att, out))
+				return emitted;
+
+			return emitted + (rayColor(out, hittables, depth - 1)) * att;
+		}
+		else {
+			return background;
+		}
 	}
 	double linearToGamma(double linear)
 	{
@@ -164,6 +169,8 @@ private:
 	double focusDist; // we assume focal length = focusDist
 	double defocusAngle; // angle of cone formed by lens and center point of focal plane
 	Vec defocusV, defocusU;
+
+	Color background;
 
 	Random rand;
 };
