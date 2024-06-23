@@ -2,6 +2,7 @@
 #include <random>
 #include "Hittable.h"
 #include "Color.h"
+#include "Random.h"
 
 class Material
 {
@@ -12,22 +13,20 @@ public:
 	/// Using the design choice to always scatter with attenuation, instead of scattering 
 	/// probabilistically to model the albedo.
 	/// </summary>
-	virtual bool scatter(const Ray& rayIn, const Hit& hit, Color& attenuation, Ray& rayOut) = 0;
+	virtual bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation, Ray& rayOut) = 0;
 };
 
 class Lambertian : public Material
 {
 private:
-	std::uniform_real_distribution<double> distribution;
-	std::shared_ptr<std::mt19937> generator;
 	Color albedo;
 public:
-	Lambertian(const Color& albedo_, const std::shared_ptr<std::mt19937>& gen)
-		: albedo(albedo_), distribution(-0.5, 0.5), generator(gen) {}
+	Lambertian(const Color& albedo_)
+		: albedo(albedo_) {}
 
-	bool scatter(const Ray& rayIn, const Hit& hit, Color& attenuation, Ray& rayOut) override
+	bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation, Ray& rayOut) override
 	{
-		Vec out = sampleLambertian(hit.normal);
+		Vec out = sampleLambertian(hit.normal, rand);
 		rayOut = Ray(hit.pos, out);
 		attenuation = albedo;
 		return true;
@@ -36,13 +35,13 @@ public:
 	/// <summary>
 	/// Returns a normalized scatter direction.
 	/// </summary>
-	Vec sampleLambertian(const Vec& normal)
+	Vec sampleLambertian(const Vec& normal, Random& rand)
 	{
 		Vec vec;
 		while (true)
 		{
-			vec = 2.0 * Vec(distribution(*generator), distribution(*generator), 
-				distribution(*generator));
+			// random vector on box of [-1, 1]
+			vec = Vec(rand.randomDouble(-1.0, 1.0), rand.randomDouble(-1.0, 1.0), rand.randomDouble(-1.0, 1.0));
 
 			if (glm::length(vec) < 1.0)
 			{
@@ -61,8 +60,7 @@ public:
 class Metal : public Material
 {
 public:
-	Metal(const Color& albedo, double fuzz, const std::shared_ptr<std::mt19937> gen) : albedo(albedo), fuzz(fuzz),
-		distribution(-0.5, 0.5), generator(gen)
+	Metal(const Color& albedo, double fuzz) : albedo(albedo), fuzz(fuzz)
 	{
 		if (fuzz < 0.0 || fuzz > 1.0)
 		{
@@ -70,7 +68,7 @@ public:
 		}
 	}
 
-	bool scatter(const Ray& rayIn, const Hit& hit, Color& attenuation, Ray& rayOut) override
+	bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation, Ray& rayOut) override
 	{
 		attenuation = albedo;
 		// normal is unit vector, so is incident ray
@@ -79,8 +77,8 @@ public:
 		Vec vec;
 		while (true)
 		{
-			vec = 2.0 * Vec(distribution(*generator), distribution(*generator), 
-				distribution(*generator));
+			// random vector on box of [-1, 1]
+			vec = Vec(rand.randomDouble(-1.0, 1.0), rand.randomDouble(-1.0, 1.0), rand.randomDouble(-1.0, 1.0));
 
 			if (glm::length(vec) < 1.0)
 			{
@@ -109,7 +107,7 @@ public:
 	{
 	}
 
-	bool scatter(const Ray& rayIn, const Hit& hit, Color& attenuation, Ray& rayOut) override
+	bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation, Ray& rayOut) override
 	{
 		attenuation = Color(1, 1, 1);
 
@@ -121,7 +119,7 @@ public:
 		double sinTheta = sqrt(1 - cosTheta * cosTheta);
 
 		// apply Schlick approximation stochastically (no way to do linear combination)
-		if (ri * sinTheta > 1.0)
+		if (ri * sinTheta > 1.0 || reflectance(cosTheta, ri) > rand.randomDouble())
 		{
 			// reflection
 			rayOut = Ray(hit.pos, reflect(rayIn.dir(), hit.normal));

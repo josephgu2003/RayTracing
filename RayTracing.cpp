@@ -12,41 +12,54 @@
 #include "Camera.h"
 
 using namespace std;
-/**
-template <typename T>
-Color rayColor(const Ray& ray, T hittables)
-{
-	Interval interval(-100, 100);
-	Hit hit;
-	if (hittables.hit(ray, interval, hit))
-	{
-		return (hit.normal + 1.0) * 0.5;
-	}
-
-	auto unit_direction = ray.dir();
-	auto a = 0.5 * (unit_direction.y + 1.0);
-	return (1.0 - a) * Color(1.0, 1.0, 1.0) + a * Color(0.5, 0.7, 1.0);
-}
-*/
 
 int raytrace()
 {
-	Camera cam(16.0 / 9.0, 0.1, 550, 20);
+	CamParams params;
+	params.samplesPerPixel = 150;
+	params.imgWidth = 400;
+	params.vFov = 30.0;
+	params.pos = Point(0, 1, 0);
+	params.lookAt = Point(0, 0, -5);
+	Camera cam(params, Random(1));
 	// SCENE
 	HittableList hittables;
 
-	std::shared_ptr<std::mt19937> generator = std::make_shared<std::mt19937>();
-	auto redMat = std::make_shared<Lambertian>(Color(1, 0.5, 0) * 0.4, generator);
-	auto metalMat = std::make_shared<Metal>(Color(0.7, 1.0, 1) * 0.4, 0.3, generator);
-	auto greenMat = std::make_shared<Lambertian>(Color(0.8, 0.8, 1) * 0.4, generator);
+	auto redMat = std::make_shared<Lambertian>(Color(1, 0.5, 0) * 0.4);
+	auto metalMat = std::make_shared<Metal>(Color(0.7, 1.0, 1) * 0.4, 0.0);
+	auto greenMat = std::make_shared<Lambertian>(Color(0.8, 0.8, 1) * 0.4);
 	auto glassMat = std::make_shared<Dielectric>(1.5);
-	auto bubbleMat = std::make_shared<Dielectric>(1.0 / 1.5);
 
-	hittables.add(std::make_shared<Sphere>(Point(0, 0.0, -1.5), 0.3, redMat));
-	hittables.add(std::make_shared<Sphere>(Point(0.8, 0.0, -1.5), 0.3, metalMat));
-	hittables.add(std::make_shared<Sphere>(Point(-0.8, 0.0, -1.5), 0.3, glassMat));
-	hittables.add(std::make_shared<Sphere>(Point(-0.8, 0.0, -1.5), 0.28, bubbleMat));
-	hittables.add(std::make_shared<Sphere>(Point(0, -100.3, -1.5), 100, greenMat));
+	hittables.add(std::make_shared<Sphere>(Point(0, -1000.3, -5), 1000, greenMat));
+
+	hittables.add(std::make_shared<Sphere>(Point(0, 0.0, -5.), 0.3, redMat));
+	hittables.add(std::make_shared<Sphere>(Point(0.8, 0.0, -3.5), 0.3, metalMat));
+	hittables.add(std::make_shared<Sphere>(Point(-0.8, 0.0, -6.), 0.3, glassMat));
+
+	Random rand(3);
+
+	for (int i = -5; i < 5; i++)
+	{
+		for (int j = -7; j < 3; j++)
+		{
+			Point pt = Point((rand.randomDouble() + i) * 0.6, -0.2, rand.randomDouble() + j);
+			double chooseMat = rand.randomDouble();
+
+			if (chooseMat < 0.2) {
+				hittables.add(std::make_shared<Sphere>(pt, 0.1, glassMat));
+			}
+			else if (chooseMat < 0.8)
+			{
+				hittables.add(std::make_shared<Sphere>(pt, 0.1,
+					std::make_shared<Lambertian>(Color(rand.randomDouble(0.4, 1), rand.randomDouble(0.4, 1.0), rand.randomDouble(0.4, 1.0)))));
+			}
+			else
+			{
+				hittables.add(std::make_shared<Sphere>(pt, 0.1,
+					std::make_shared<Metal>(Color(rand.randomDouble(0.4, 1), rand.randomDouble(0.4, 1.0), rand.randomDouble(0.4, 1.0)), 0.1)));
+			}
+		}
+	}
 
 	auto img = cam.render(hittables);
 

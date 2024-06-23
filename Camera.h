@@ -1,25 +1,43 @@
 #pragma once
 #include <iostream>
 #include <stdexcept>
-#include <random>
 
 #include "Color.h"
 #include "HittableList.h"
+#include "Random.h"
+#include "RayTracing.h"
+
+struct CamParams
+{
+public:
+	double aspectRatio = 16.0 / 9.0;
+	double focalDist = 5.0;
+	double defocusAngle = 0.2;
+	int samplesPerPixel = 100;
+	int maxDepth = 8;
+	int imgWidth = 400;
+	double vFov = 50.0;
+	Point pos = Point(0.0, 0.0, 0.0);
+	Point lookAt = Point(0.0, 0.0, -1.0);
+	Vec upDir = Vec(0.0, 1.0, 0.0);
+};
 
 class Camera
 {
 public:
-	Camera(double aspectRatio, double focalLength, int samplesPerPixel, int maxDepth)
+	Camera(CamParams params, Random random)
 	{
-		this->samplesPerPixel = samplesPerPixel;
-		this->maxDepth = maxDepth;
-		distribution = std::uniform_real_distribution<>(-0.5, 0.5);
+		this->samplesPerPixel = params.samplesPerPixel;
+		this->maxDepth = params.maxDepth;
+		this->rand = random;
+		this->focusDist = params.focalDist;
+		this->defocusAngle = params.defocusAngle;
 
 		// IMG PARAMS
 		// set up image pixel dims based on aspect ratio
-		imgWidth = 400;
+		this->imgWidth = params.imgWidth;
 
-		imgHeight = int(imgWidth / aspectRatio);
+		this->imgHeight = int(imgWidth / params.aspectRatio);
 
 		if (imgHeight < 1)
 		{
@@ -29,28 +47,37 @@ public:
 		// CAMERA PARAMS
 		// 
 		// (0, 1, 0) -> Up
-		// (1, 0, 0) -> Right
-		// (0, 0, -1) -> Forwards
 		// 
 		// pixel locations are at center of pixel squares
 		// 
 		// use true ratio of width / height pixels for precision
-		auto viewportHeight = 0.1;
+		auto viewportHeight = 2 * focusDist * tan(degToRad(params.vFov / 2.0));
 		auto viewportWidth = viewportHeight * (imgWidth / (double)imgHeight);
-		cameraOrigin = Point(0, 0, 0);
+		this->cameraOrigin = params.pos;
 
 		// spanning vectors of viewport
-		auto viewportU = Vec(viewportWidth, 0, 0);
-		auto viewportV = Vec(0, -viewportHeight, 0);
+		auto forward = glm::normalize(params.lookAt - params.pos);
+
+		auto viewportU = glm::cross(forward, params.upDir);
+		viewportU = viewportWidth * glm::normalize(viewportU);
+
+		auto viewportV = glm::cross(forward, viewportU);
+		viewportV = viewportHeight * glm::normalize(viewportV);
 
 		// deltas between pixels
-		deltaU = viewportU / (double)imgWidth;
-		deltaV = viewportV / (double)imgHeight;
+		this->deltaU = viewportU / (double)imgWidth;
+		this->deltaV = viewportV / (double)imgHeight;
+
+		assert(fabs(1.0 - glm::dot(deltaU - deltaV, deltaU - deltaV)) < 1e-6);
+
+		double defocusRadius = tan(degToRad(defocusAngle)) * focusDist;
+		this->defocusU = glm::normalize(deltaU) * defocusRadius;
+		this->defocusV = glm::normalize(deltaV) * defocusRadius;
 
 		// position of 00 pixel
-		auto viewportTopLeft = cameraOrigin + focalLength * Vec(0, 0, -1)
+		auto viewportTopLeft = cameraOrigin + focusDist * forward
 			- viewportU / 2.0 - viewportV / 2.0;
-		pixel00Pos = viewportTopLeft + 0.5 * deltaU + 0.5 * deltaV;
+		this->pixel00Pos = viewportTopLeft + 0.5 * deltaU + 0.5 * deltaV;
 
 		img.resize(imgHeight * imgWidth *  3);
 	}
@@ -67,7 +94,7 @@ public:
 		{
 			Color att;
 			Ray out;
-			hit.mat->scatter(ray, hit, att, out);
+			hit.mat->scatter(ray, hit, rand, att, out);
 			return (rayColor(out, hittables, depth - 1)) * att;
 			//return glm::clamp(hit.normal, 0.0, 1.0);
 		}
@@ -111,11 +138,19 @@ public:
 
 	Ray sampleRayToPixel(int row, int col)
 	{
-		auto pixelPos = pixel00Pos + (row + distribution(generator)) * deltaV +
-			(col + distribution(generator)) * deltaU;
-		auto rayDir = pixelPos - cameraOrigin;
+		auto pixelPos = pixel00Pos + (row + rand.randomDouble(-0.5, 0.5)) * deltaV +
+			(col + rand.randomDouble(-0.5, 0.5)) * deltaU;
 
-		return Ray(cameraOrigin, rayDir);
+		auto rayOrigin = (defocusAngle <= 0.0) ? cameraOrigin : defocusDiskSample();
+		auto rayDir = pixelPos - rayOrigin;
+
+		return Ray(rayOrigin, rayDir);
+	}
+
+	Point defocusDiskSample()
+	{
+		auto randOnDisk = rand.sampleUnitDisk();
+		return cameraOrigin + randOnDisk.x * defocusU + randOnDisk.y * defocusV;
 	}
 
 private:
@@ -126,6 +161,9 @@ private:
 	int samplesPerPixel;
 	int maxDepth;
 
-	std::uniform_real_distribution<double> distribution;
-	std::mt19937 generator;
+	double focusDist; // we assume focal length = focusDist
+	double defocusAngle; // angle of cone formed by lens and center point of focal plane
+	Vec defocusV, defocusU;
+
+	Random rand;
 };
