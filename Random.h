@@ -1,6 +1,7 @@
 #pragma once
 #include <random>
 #include "Point.h"
+#include "RayTracing.h"
 
 class Random
 {
@@ -37,6 +38,19 @@ public:
 				return pt;
 			}
 		}
+	}
+
+	Point sampleUnitSphere()
+	{
+		double uni1 = randomDouble();
+		double uni2 = randomDouble();
+		double z = 1 - 2 * uni2;
+		assert((1 - z * z) <= 1.00001);
+		assert((1 - z * z) >= 0.00000);
+		double sinPhi = sqrt(1 - z * z);
+		double x = cos(2 * pi * uni1) * sinPhi;
+		double y = sin(2 * pi * uni1) * sinPhi;
+		return Point(x, y, z);
 	}
 
 private:

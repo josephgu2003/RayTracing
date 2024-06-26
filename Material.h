@@ -42,18 +42,8 @@ public:
 	/// </summary>
 	Vec sampleLambertian(const Vec& normal, Random& rand)
 	{
-		Vec vec;
-		while (true)
-		{
-			// random vector on box of [-1, 1]
-			vec = Vec(rand.randomDouble(-1.0, 1.0), rand.randomDouble(-1.0, 1.0), rand.randomDouble(-1.0, 1.0));
-
-			if (glm::length(vec) < 1.0)
-			{
-				vec = glm::normalize(vec);
-				break;
-			}
-		}
+		Vec vec = rand.sampleUnitSphere();
+		
 		vec = vec + normal;
 
 		vec = nearZero(vec) ? normal : glm::normalize(vec);
@@ -79,18 +69,7 @@ public:
 		// normal is unit vector, so is incident ray
 		auto rayDir = rayIn.dir() - 2 * glm::dot(hit.normal, rayIn.dir()) * hit.normal;
 
-		Vec vec;
-		while (true)
-		{
-			// random vector on box of [-1, 1]
-			vec = Vec(rand.randomDouble(-1.0, 1.0), rand.randomDouble(-1.0, 1.0), rand.randomDouble(-1.0, 1.0));
-
-			if (glm::length(vec) < 1.0)
-			{
-				vec = glm::normalize(vec);
-				break;
-			}
-		}
+		Vec vec = rand.sampleUnitSphere();
 
 		rayDir = glm::normalize(rayDir) + fuzz * vec;
 		rayOut = Ray(hit.pos, rayDir);

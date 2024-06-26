@@ -16,9 +16,9 @@ using namespace std;
 int raytrace()
 {
 	CamParams params;
-	params.samplesPerPixel = 700;
+	params.samplesPerPixel = 2000;
 	params.imgWidth = 300;
-	params.vFov = 10.0;
+	params.vFov = 20.0;
 	params.pos = Point(0, 2, 0);
 	params.lookAt = Point(0, 0, -5);
 	params.defocusAngle = -1;
@@ -27,8 +27,8 @@ int raytrace()
 	// SCENE
 	HittableList hittables;
 
-	auto redMat = std::make_shared<Lambertian>(Color(1, 0.1, 0.1));
-	auto metalMat = std::make_shared<Metal>(Color(0.7, 1.0, 1) * 0.4, 0.0);
+	auto redMat = std::make_shared<Lambertian>(Color(1, 1, 1) * 0.8);
+	auto metalMat = std::make_shared<Metal>(Color(0.7, 1.0, 1), 0.0);
 	auto whiteMat = std::make_shared<Lambertian>(Color(1, 1.0, 1));
 	auto greenMat = std::make_shared<Lambertian>(Color(0.8, 0.8, 1) * 0.4);
 	auto glassMat = std::make_shared<Dielectric>(1.5);
@@ -36,15 +36,21 @@ int raytrace()
 	// environment
 	hittables.add(std::make_shared<Sphere>(Point(0, -1000.3, -5), 1000, greenMat));
 	hittables.add(std::make_shared<Sphere>(Point(0, 0, 0), 6, redMat));
+	hittables.add(std::make_shared<Sphere>(Point(0, 3, 0), 1,
+				std::make_shared<Emissive>(0.5 * Color(1, 0.9, 0.8))));
 
 	Point ctPt = Point(0, 0, -5);
 
 	hittables.add(std::make_shared<Sphere>(ctPt, 0.3, metalMat));
 	//hittables.add(std::make_shared<Sphere>(Point(-0.8, 0.0, -5.7), 0.3, redMat));
 
-	Random rand(12);
-	hittables.add(std::make_shared<Sphere>(Point(1, 1, -5), 0.3,
-				std::make_shared<Emissive>(10.0 * Color(1, 0.9, 0.8))));
+	Random rand(100);
+
+	auto color1 = std::make_shared<Emissive>(10.0 * Color(0.3, 0.9, 0.4));
+	auto color2 = std::make_shared<Emissive>(10.0 * Color(0.3, 0.3, 0.9));
+	auto color3 = std::make_shared<Emissive>(10.0 * Color(0.9, 0.3, 0.3));
+
+	std::shared_ptr<Emissive> colors[] = {color1, color2, color3};
 
 	for (int i = -3; i < 3; i++)
 	{
@@ -53,10 +59,10 @@ int raytrace()
 			if (i == 0 && j == 0)
 				continue;
 
-			Point pt = Point(0.4 * (rand.randomDouble(0, 0.3) + i), -0.2, 0.4 * (rand.randomDouble(0, 0.3) + j)) + ctPt;
+			Point pt = Point(0.6 * (rand.randomDouble(0, 0.7) + i), -0.2, 0.6 * (rand.randomDouble(0, 0.7) + j)) + ctPt;
 			double chooseMat = rand.randomDouble();
 
-			if (i == 2 && j == -2)
+			if (i == 2 && j == 2)
 			{
 				hittables.add(std::make_shared<Sphere>(pt + Point(0, 0.2, 0), 0.3, glassMat));
 				continue;
@@ -70,15 +76,14 @@ int raytrace()
 				hittables.add(std::make_shared<Sphere>(pt, 0.1,
 					std::make_shared<Lambertian>(Color(rand.randomDouble(0, 1), rand.randomDouble(0, 1.0), rand.randomDouble(0, 1.0)))));
 			}
-			else if (chooseMat < 0.6)
+			else if (chooseMat < 0.5)
 			{
 				hittables.add(std::make_shared<Sphere>(pt, 0.1,
 					std::make_shared<Metal>(Color(rand.randomDouble(0, 1), rand.randomDouble(0, 1.0), rand.randomDouble(0, 1.0)), 0.1)));
 			}
-			else
+			else if (chooseMat < 0.6)
 			{
-				hittables.add(std::make_shared<Sphere>(pt, 0.1,
-					std::make_shared<Emissive>(2.0 * Color(rand.randomDouble(0.5, 1), rand.randomDouble(0.5, 1.0), rand.randomDouble(0.5, 1.0)))));
+				hittables.add(std::make_shared<Sphere>(pt + Point(0, 0.1, 0), 0.2, colors[(int)rand.randomDouble(0, 3)]));
 			}
 		}
 	}

@@ -70,7 +70,7 @@ public:
 		this->deltaU = viewportU / (double)imgWidth;
 		this->deltaV = viewportV / (double)imgHeight;
 
-		assert(fabs(1.0 - glm::dot(deltaU - deltaV, deltaU - deltaV)) < 1e-6);
+		assert(fabs(glm::dot(deltaU, deltaU) - glm::dot(deltaV, deltaV)) < 1e-6);
 
 		double defocusRadius = tan(degToRad(defocusAngle)) * focusDist;
 		this->defocusU = glm::normalize(deltaU) * defocusRadius;
