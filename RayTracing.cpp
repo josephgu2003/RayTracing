@@ -10,8 +10,74 @@
 #include "Sphere.h"
 #include "HittableList.h"
 #include "Camera.h"
+#include "Quad.h"
 
 using namespace std;
+
+using MatPtr = std::shared_ptr<Material>;
+
+void placeBox(HittableList& hittables, Point origin, double x, double y, double z, 
+	MatPtr bot, MatPtr top, MatPtr left, MatPtr right, MatPtr front, MatPtr back)
+{
+	hittables.add(std::make_shared<Quad>(origin + Point(-x, -y, -z), Vec(2 * x, 0, 0), Vec(0, 2 * y, 0), back));
+	hittables.add(std::make_shared<Quad>(origin + Point(-x, -y, z), Vec(2 * x, 0, 0), Vec(0, 2 * y, 0), front));
+
+	hittables.add(std::make_shared<Quad>(origin + Point(-x, -y, -z), Vec(0, 2 * y, 0), Vec(0, 0, 2 * z), left));
+	hittables.add(std::make_shared<Quad>(origin + Point(x, -y, -z), Vec(0, 2 * y, 0), Vec(0, 0, 2 * z), right));
+
+	hittables.add(std::make_shared<Quad>(origin + Point(-x, -y, -z), Vec(2 * x, 0, 0), Vec(0, 0, 2 * z), bot));
+	hittables.add(std::make_shared<Quad>(origin + Point(-x, y, -z), Vec(2 * x, 0, 0), Vec(0, 0, 2 * z), top));
+}
+
+int cornellBox()
+{
+	CamParams params;
+	params.samplesPerPixel = 200;
+	params.imgWidth = 300;
+	params.vFov = 50.0;
+	params.pos = Point(0, 0.0, 2);
+	params.lookAt = Point(0, 0, -5);
+	params.defocusAngle = -1;
+	params.maxDepth = 8;
+	params.aspectRatio = 1.0;
+	Camera cam(params, Random(1));
+	// SCENE
+	HittableList hittables;
+
+	auto redMat = std::make_shared<Lambertian>(Color(1, 0, 0));
+	auto metalMat = std::make_shared<Metal>(Color(0.7, 1.0, 1), 0.0);
+	auto whiteMat = std::make_shared<Lambertian>(Color(1, 1, 1));
+	auto greenMat = std::make_shared<Lambertian>(Color(0, 1, 0));
+	auto glassMat = std::make_shared<Dielectric>(1.5);
+
+	auto lightMat = std::make_shared<Emissive>(2.0 * Color(1, 0.9, 0.8));
+
+	Random rand(100);
+
+	auto color1 = std::make_shared<Emissive>(10.0 * Color(0.3, 0.9, 0.4));
+	auto color2 = std::make_shared<Emissive>(10.0 * Color(0.3, 0.3, 0.9));
+	auto color3 = std::make_shared<Emissive>(10.0 * Color(0.9, 0.3, 0.3));
+
+	std::shared_ptr<Emissive> colors[] = {color1, color2, color3};
+	// environment
+
+	hittables.add(std::make_shared<Quad>(Point(-0.5, 1.95, -5), Vec(1, 0, 0), Vec(0, 0, 1), lightMat));
+	
+	placeBox(hittables, Point(0, 0, 0), 2, 2, 6, whiteMat, whiteMat, greenMat, redMat, whiteMat, whiteMat);
+
+	placeBox(hittables, Point(-0.5, -1, -5), 0.3, 1.5, 0.3, whiteMat, whiteMat, whiteMat, whiteMat, whiteMat, whiteMat);
+	placeBox(hittables, Point(0.5, -1, -3.5), 0.3, 1, 0.3, whiteMat, whiteMat, whiteMat, whiteMat, whiteMat, whiteMat);
+
+	auto img = cam.render(hittables);
+
+	if (stbi_write_jpg("test_img2.jpg", cam.imageWidth(), cam.imageHeight(), 3, img.data(), 100))
+		std::cout << "Success" << std::endl;
+	else 
+		std::cout << "Fail" << std::endl;
+
+	return 0;
+}
+
 
 int raytrace()
 {
@@ -100,5 +166,5 @@ int raytrace()
 
 int main()
 {
-	return raytrace();
+	return cornellBox();
 }
