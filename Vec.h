@@ -35,3 +35,8 @@ inline Vec refract(const Vec& ray0, const Vec& norm, double eta1OverEta0)
 	assert(fabs(1.0 - glm::dot(result, result)) < 1e-6);
 	return result;
 }
+
+inline bool vecIsLength(const Vec& vec, double len)
+{
+	return fabs(glm::length(vec) - len) < 1e-8;
+}

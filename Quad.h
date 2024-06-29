@@ -8,6 +8,7 @@ public:
 	Quad(const Point& Q, const Vec& u, const Vec& v, std::shared_ptr<Material> mat)
 		: Q(Q), u(u), v(v), mat(mat)
 	{
+		assert(glm::length(glm::cross(u, v)) > 1e-6);
 	}
 
 	bool hit(const Ray& ray, const Interval& interval, Hit& hit) const override

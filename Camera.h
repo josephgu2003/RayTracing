@@ -6,6 +6,7 @@
 #include "HittableList.h"
 #include "Random.h"
 #include "RayTracing.h"
+#include "Pdf.h"
 
 struct CamParams
 {
@@ -97,12 +98,19 @@ public:
 			Color emitted = hit.mat->emitted(ray, hit, rand);
 
 			Color att;
-			Ray out;
 
-			if (!hit.mat->scatter(ray, hit, rand, att, out))
+			if (!hit.mat->scatter(ray, hit, rand, att))
 				return emitted;
 
-			return emitted + (rayColor(out, hittables, depth - 1)) * att;
+			// generate scattered ray based on importance sampling
+			CosinePdf surfacePdf(hit.normal);
+			Ray out(hit.pos, surfacePdf.generate(rand));
+
+			double scatteringPDF = hit.mat->scatteringPDF(ray, hit, out);
+			double samplingPDF = surfacePdf.value(out.dir());
+
+			// rendering equation is kind of in here
+			return emitted + (rayColor(out, hittables, depth - 1)) * att * scatteringPDF / samplingPDF;
 		}
 		else {
 			return background;
