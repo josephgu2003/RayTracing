@@ -53,8 +53,7 @@ public:
 		double uni1 = randomDouble();
 		double uni2 = randomDouble();
 		double z = 1 - 2 * uni2;
-		assert((1 - z * z) <= 1.00001);
-		assert((1 - z * z) >= 0.00000);
+		assert((1 - z * z) >= 0);
 		double sinPhi = sqrt(1 - z * z);
 		double x = cos(2 * pi * uni1) * sinPhi;
 		double y = sin(2 * pi * uni1) * sinPhi;
@@ -69,6 +68,23 @@ public:
 		assert(z2 >= 0);
 		p.z = sqrt(z2);
 		return p;
+	}
+
+	Point sampleCone(double radius, double height)
+	{
+		double r1 = randomDouble();
+		double r2 = randomDouble();
+		
+		double cosMaxSquared = 1 - radius * radius / (height * height);
+		assert(cosMaxSquared >= 1e-8);
+		double cosMax = sqrt(cosMaxSquared);
+
+		double z = 1 + r2 * (cosMax - 1);
+		assert(z <= 1);
+		double phi = 2 * pi * r1;
+		double x = cos(phi) * sqrt(1 - z * z);
+		double y = sin(phi) * sqrt(1 - z * z);
+		return Point(x, y, z);
 	}
 
 private:
