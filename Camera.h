@@ -1,12 +1,14 @@
 #pragma once
 #include <iostream>
 #include <stdexcept>
+#include <chrono>
 
 #include "Color.h"
 #include "HittableList.h"
 #include "Random.h"
 #include "RayTracing.h"
 #include "Pdf.h"
+#include "Material.h"
 
 struct CamParams
 {
@@ -22,6 +24,7 @@ public:
 	Point lookAt = Point(0.0, 0.0, -1.0);
 	Vec upDir = Vec(0.0, 1.0, 0.0);
 	Color background = Color(0, 0, 0);
+	double mixturePDFRatio = 0.5;
 };
 
 class Camera
@@ -83,46 +86,69 @@ public:
 		this->pixel00Pos = viewportTopLeft + 0.5 * deltaU + 0.5 * deltaV;
 
 		img.resize(imgHeight * imgWidth *  3);
+
+		this->mixturePDFRatio = params.mixturePDFRatio;
 	}
 
-	template <typename T>
-	Color rayColor(const Ray& ray, T hittables, int depth)
+	Color rayColor(const Ray& ray, const HittableList& hittables, const Hittable& lights, int depth)
 	{
 		if (depth <= 0)
 			return Color(0, 0, 0);
 
 		Interval interval(0.0001, 100);
 		Hit hit;
+
 		if (hittables.hit(ray, interval, hit))
 		{
 			Color emitted = hit.mat->emitted(ray, hit, rand);
 
-			Color att;
+			const ScatterRecord scatterRecord = hit.mat->scatter(ray, hit, rand);
 
-			if (!hit.mat->scatter(ray, hit, rand, att))
+			if (!scatterRecord.scattered)
 				return emitted;
 
-			// generate scattered ray based on importance sampling
-			CosinePdf surfacePdf(hit.normal);
-			Ray out(hit.pos, surfacePdf.generate(rand));
+			if (scatterRecord.skipPdf)
+			{
+				// rendering equation is kind of in here
+				return emitted + (rayColor(scatterRecord.skipPdfRay, hittables, lights, depth - 1))
+					* scatterRecord.attenuation;
+			} 
 
-			double scatteringPDF = hit.mat->scatteringPDF(ray, hit, out);
+			// generate scattered ray based on importance sampling
+			const MixturePdf surfacePdf(std::make_shared<HittablePdf>(lights, hit.pos), scatterRecord.pdfPtr, mixturePDFRatio);
+			Ray out(hit.pos, surfacePdf.generate(rand));
 			double samplingPDF = surfacePdf.value(out.dir());
+			double scatteringPDF = scatterRecord.pdfPtr->value(out.dir());
+			assert(samplingPDF != 0);
+			assert(scatteringPDF != 0);
 
 			// rendering equation is kind of in here
-			return emitted + (rayColor(out, hittables, depth - 1)) * att * scatteringPDF / samplingPDF;
+			return emitted + (rayColor(out, hittables, lights, depth - 1)) * scatterRecord.attenuation * scatteringPDF / samplingPDF;
 		}
 		else {
 			return background;
 		}
+
 	}
+	Color aces_approx(const Color& v)
+		{
+			Color val = v * 0.6;
+			double a = 2.51f;
+			double b = 0.03f;
+			double c = 2.43f;
+			double d = 0.59f;
+			double e = 0.14f;
+			return glm::clamp((val * (a * val + b)) / (val * (c * val + d) + e), 0.0, 1.0);
+		}
+
 	double linearToGamma(double linear)
 	{
-		return linear > 0.0 ? sqrt(linear) : 0.0;
+		return linear > 0.0 ? pow(linear, 1.0 / 2.2) : 0.0;
 	}
 
-	const std::vector<unsigned char> render(const HittableList& hittables)
+	const std::vector<unsigned char> render(const HittableList& hittables, const Hittable& lights)
 	{
+		auto start = std::chrono::high_resolution_clock::now();
 		for (int row = 0; row < imgHeight; row++)
 		{
 			std::cout << "Scanlines remaining: " << (imgHeight - row) << ' ' << std::endl;
@@ -133,15 +159,19 @@ public:
 				for (int s = 0; s < samplesPerPixel; s++)
 				{
 					auto ray = sampleRayToPixel(row, col);
-					color += rayColor(ray, hittables, maxDepth);
+					color += rayColor(ray, hittables, lights, maxDepth);
 				}
 				color /= samplesPerPixel;
-				color = glm::clamp(color, 0.0, 0.999);
-				img[3 * (row * imgWidth + col)] = linearToGamma(color.x) * 256;
-				img[3 * (row * imgWidth + col) + 1] = linearToGamma(color.y) * 256;
-				img[3 * (row * imgWidth + col) + 2] = linearToGamma(color.z) * 256;
+				color = aces_approx(color);
+				img[3 * (row * imgWidth + col)] = linearToGamma(color.x) * 255;
+				img[3 * (row * imgWidth + col) + 1] = linearToGamma(color.y) * 255;
+				img[3 * (row * imgWidth + col) + 2] = linearToGamma(color.z) * 255;
 			}
 		}
+
+		auto stop = std::chrono::high_resolution_clock::now();
+		auto duration = duration_cast<std::chrono::seconds>(stop - start);
+		std::cout << duration.count() << std::endl;
 
 		return img;
 	}
@@ -181,4 +211,6 @@ private:
 	Color background;
 
 	Random rand;
+
+	double mixturePDFRatio;
 };

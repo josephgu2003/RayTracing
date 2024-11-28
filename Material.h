@@ -3,6 +3,23 @@
 #include "Hittable.h"
 #include "Color.h"
 #include "Random.h"
+#include "Pdf.h"
+
+// for the sake of speed, avoid polymoprhism
+class ScatterRecord
+{
+public:
+	bool scattered;
+	Color attenuation;
+	std::shared_ptr<Pdf> pdfPtr;
+	bool skipPdf;
+	Ray skipPdfRay;
+
+	ScatterRecord(bool scattered, const Color& attenuation, const std::shared_ptr<Pdf>& pdfPtr, bool skipPdf, const Ray& skipPdfRay)
+		: scattered(scattered), attenuation(attenuation), pdfPtr(pdfPtr), skipPdf(skipPdf), skipPdfRay(skipPdfRay)
+	{
+	}
+};
 
 // Handles the attenuation and scatter pdf values. The importance sampling is done elsewhere.
 class Material
@@ -13,21 +30,14 @@ public:
 	/// rayIn is the ray from the camera, but actually the outgoing ray physically. 
 	/// Using the design choice to always scatter with attenuation, instead of scattering 
 	/// probabilistically to model the albedo.
-	/// This function only tells if the ray scatters, and what is the attentuation in the rendering equation.
+	/// This function tells if the ray scatters, what is the attentuation in the rendering equation,
+	/// what is the unbiased pdf to scatter with, or provides a scattering direction in the case of Dirac distribution.
 	/// </summary>
-	virtual bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation) = 0;
+	virtual ScatterRecord scatter(const Ray& rayIn, const Hit& hit, Random& rand) = 0;
 
 	virtual Color emitted(const Ray& rayIn, const Hit& hit, Random& rand)
 	{
 		return Color(0, 0, 0);
-	}
-	/// <summary>
-	/// Gonna assume the hit normal is facing against the ray, due to the convention in Hittables.
-	/// This is the scattering pdf in the rendering equation.
-	/// </summary>
-	virtual double scatteringPDF(const Ray& rayIn, const Hit& hit, const Ray& scattered)
-	{
-		return 0.0f;
 	}
 };
 
@@ -39,12 +49,9 @@ public:
 	Lambertian(const Color& albedo_)
 		: albedo(albedo_) {}
 
-	bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation) override
+	ScatterRecord scatter(const Ray& rayIn, const Hit& hit, Random& rand) override
 	{
-		//Vec out = sampleLambertian(hit.normal, rand);
-	//	rayOut = Ray(hit.pos, out);
-		attenuation = albedo;
-		return true;
+		return ScatterRecord(true, albedo, std::make_shared<CosinePdf>(hit.normal), false, Ray());
 	}
 
 	/// <summary>
@@ -63,11 +70,6 @@ public:
 
 		return (D > 0) ? vec : -vec;
 	}
-
-	double scatteringPDF(const Ray& rayIn, const Hit& hit, const Ray& scattered) override
-	{
-		return max(glm::dot(scattered.dir(), hit.normal) / pi, 0.0);
-	}
 };
 
 class Metal : public Material
@@ -81,18 +83,15 @@ public:
 		}
 	}
 
-	bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation) override
+	ScatterRecord scatter(const Ray& rayIn, const Hit& hit, Random& rand) override
 	{
-		attenuation = albedo;
 		// normal is unit vector, so is incident ray
 		auto rayDir = rayIn.dir() - 2 * glm::dot(hit.normal, rayIn.dir()) * hit.normal;
 
-	//	Vec vec = rand.sampleUnitSphere();
+		Vec vec = rand.sampleUnitSphere();
+		rayDir = glm::normalize(rayDir) + fuzz * vec;
 
-	//	rayDir = glm::normalize(rayDir) + fuzz * vec;
-	//	rayOut = Ray(hit.pos, rayDir);
-
-		return true;
+		return ScatterRecord(true, albedo, nullptr, true, Ray(hit.pos, rayDir));
 	}
 private:
 	Color albedo;
@@ -109,10 +108,8 @@ public:
 	{
 	}
 
-	bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation) override
+	ScatterRecord scatter(const Ray& rayIn, const Hit& hit, Random& rand) override
 	{
-		attenuation = Color(1, 1, 1);
-
 		// frontface: ray is hitting material from outside
 		double ri = hit.frontface ? 1.0 / refractionIndex : refractionIndex;
 
@@ -120,18 +117,19 @@ public:
 		assert(cosTheta <= 1.0 && cosTheta >= 0.0);
 		double sinTheta = sqrt(1 - cosTheta * cosTheta);
 
+		Ray rayOut;
 		// apply Schlick approximation stochastically (no way to do linear combination)
 		if (ri * sinTheta > 1.0 || reflectance(cosTheta, ri) > rand.randomDouble())
 		{
 			// reflection
-	//		rayOut = Ray(hit.pos, reflect(rayIn.dir(), hit.normal));
+			rayOut = Ray(hit.pos, reflect(rayIn.dir(), hit.normal));
 		}
 		else {
 			// refraction
-		//	rayOut = Ray(hit.pos, refract(rayIn.dir(), hit.normal, ri));
+			rayOut = Ray(hit.pos, refract(rayIn.dir(), hit.normal, ri));
 		}
 
-		return true;
+		return ScatterRecord(true, Color(1, 1, 1), nullptr, true, rayOut);
 	}
 private:
 	double refractionIndex; // ratio of material index over enclosing media index
@@ -153,9 +151,9 @@ public:
 	{
 
 	}
-	bool scatter(const Ray& rayIn, const Hit& hit, Random& rand, Color& attenuation) override
+	ScatterRecord scatter(const Ray& rayIn, const Hit& hit, Random& rand) override
 	{
-		return false;
+		return ScatterRecord(false, Color(), nullptr, false, Ray());
 	}
 	Color emitted(const Ray& rayIn, const Hit& hit, Random& rand) override
 	{

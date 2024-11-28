@@ -32,25 +32,27 @@ void placeBox(HittableList& hittables, Point origin, double x, double y, double 
 int cornellBox()
 {
 	CamParams params;
-	params.samplesPerPixel = 50;
-	params.imgWidth = 300;
+	params.samplesPerPixel = 500;
+	params.imgWidth = 400;
 	params.vFov = 50.0;
 	params.pos = Point(0, 0.0, 2);
 	params.lookAt = Point(0, 0, -5);
 	params.defocusAngle = -1;
-	params.maxDepth = 6;
+	params.maxDepth = 10;
 	params.aspectRatio = 1.0;
 	Camera cam(params, Random(1));
 	// SCENE
 	HittableList hittables;
+	HittableList lights;
 
 	auto redMat = std::make_shared<Lambertian>(Color(1, 0, 0));
+	auto purpleMat = std::make_shared<Lambertian>(Color(1, 0.1, 1));
 	auto metalMat = std::make_shared<Metal>(Color(0.7, 1.0, 1), 0.1);
 	auto whiteMat = std::make_shared<Lambertian>(Color(1, 1, 1));
 	auto greenMat = std::make_shared<Lambertian>(Color(0, 1, 0));
 	auto glassMat = std::make_shared<Dielectric>(1.5);
 
-	auto lightMat = std::make_shared<Emissive>(3.0 * Color(1, 0.9, 0.8));
+	auto lightMat = std::make_shared<Emissive>(15.0 * Color(1, 0.9, 0.8));
 	auto lightMatDim = std::make_shared<Emissive>(1.0 * Color(1, 0.8, 0.7));
 
 	Random rand(100);
@@ -62,16 +64,24 @@ int cornellBox()
 	std::shared_ptr<Emissive> colors[] = {color1, color2, color3};
 	// environment
 
-	hittables.add(std::make_shared<Quad>(Point(-0.5, 1.95, -5), Vec(1, 0, 0), Vec(0, 0, 1), lightMatDim));
-	hittables.add(std::make_shared<Quad>(Point(-1.99, 0, -4), Vec(0, 1, 0), Vec(0, 0, 1), lightMat));
-	
 	placeBox(hittables, Point(0, 0, 0), 2, 2, 6, whiteMat, whiteMat, greenMat, redMat, whiteMat, whiteMat);
 
 	placeBox(hittables, Point(-0.5, -1, -5), 0.3, 1.5, 0.3, whiteMat, whiteMat, whiteMat, whiteMat, whiteMat, whiteMat);
-//	placeBox(hittables, Point(0.65, -1, -3.5), 0.5, 1, 0.5, metalMat, metalMat, metalMat, metalMat, metalMat, metalMat);
-	placeBox(hittables, Point(0.65, -1, -3.5), 0.5, 1, 0.5,  whiteMat, whiteMat, whiteMat, whiteMat, whiteMat, whiteMat);
+	placeBox(hittables, Point(0.65, -1.5, -3.5), 0.5, 0.5, 0.5,  metalMat, metalMat, metalMat, metalMat, metalMat, metalMat);
 
-	auto img = cam.render(hittables);
+	auto lt = std::make_shared<Quad>(Point(-0.5, 1.95, -5), Vec(1.0, 0, 0), Vec(0, 0, 1.0), lightMat);
+	hittables.add(lt);
+	lights.add(lt);
+
+	auto sphere = std::make_shared<Sphere>(Point(-0.7, -1.5, -3), 0.5, glassMat);
+	hittables.add(sphere);
+	//lights.add(sphere);
+
+	auto sphere2 = std::make_shared<Sphere>(Point(1.2, -1.8, -2.8), 0.2, purpleMat);
+	hittables.add(sphere2);
+//	lights.add(sphere2);
+
+	auto img = cam.render(hittables, lights);
 
 	if (stbi_write_jpg("test_img2.jpg", cam.imageWidth(), cam.imageHeight(), 3, img.data(), 100))
 		std::cout << "Success" << std::endl;
@@ -157,7 +167,7 @@ int raytrace()
 		}
 	}
 
-	auto img = cam.render(hittables);
+	auto img = cam.render(hittables, Quad(Point(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), whiteMat));
 
 	if (stbi_write_jpg("test_img2.jpg", cam.imageWidth(), cam.imageHeight(), 3, img.data(), 100))
 		std::cout << "Success" << std::endl;
